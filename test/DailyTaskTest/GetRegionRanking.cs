@@ -13,11 +13,11 @@ namespace GetRegionRankingTest
         {
             Program.PreWorks(new string[] { });
 
-            using (var scope = RayContainer.Root.CreateScope())
+            using (var scope = Global.ServiceProviderRoot.CreateScope())
             {
                 var dailyTaskService = scope.ServiceProvider.GetRequiredService<IVideoDomainService>();
 
-                var re = dailyTaskService.GetRandomVideo();
+                var re = dailyTaskService.GetRandomVideoOfRegion();
 
                 Assert.NotNull(re);
             }

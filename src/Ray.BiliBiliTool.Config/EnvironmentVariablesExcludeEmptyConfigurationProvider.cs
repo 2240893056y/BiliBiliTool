@@ -2,8 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Configuration.EnvironmentVariables;
 
 namespace Ray.BiliBiliTool.Config
@@ -14,22 +13,62 @@ namespace Ray.BiliBiliTool.Config
     /// </summary>
     public class EnvironmentVariablesExcludeEmptyConfigurationProvider : EnvironmentVariablesConfigurationProvider
     {
-        private readonly string prefix;
+        private readonly string _prefix;
+        private readonly Func<KeyValuePair<string, string>, bool> _startsWith;
+        private readonly Func<KeyValuePair<string, string>, bool> _removeNullValue;
+        private readonly Func<KeyValuePair<string, string>, bool> _fifter;
 
         public EnvironmentVariablesExcludeEmptyConfigurationProvider(string prefix = null) : base(prefix)
         {
-            this.prefix = prefix ?? string.Empty;
+            _prefix = prefix ?? string.Empty;
+
+            _startsWith = c => c.Key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
+            _removeNullValue = c => !string.IsNullOrWhiteSpace(c.Value);
+            _fifter = c => _startsWith(c) && _removeNullValue(c);
         }
 
         public override void Load()
         {
-            var dictionary = Environment.GetEnvironmentVariables()
-                .Cast<DictionaryEntry>()
-                .Where(it => it.Key.ToString().StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
-                             && !string.IsNullOrWhiteSpace(it.Value.ToString()))//过滤掉空值的
-                .ToDictionary(it => it.Key.ToString().Substring(prefix.Length), it => it.Value.ToString());
+            Dictionary<string, string> dictionary = Environment.GetEnvironmentVariables()
+                .ToDictionary(otherAction: t => t
+                     .Where(_fifter)
+                     .Select(x => x.NewKey(key => NormalizeKey(key))));
 
-            this.Data = new Dictionary<string, string>(dictionary, StringComparer.OrdinalIgnoreCase);
+            base.Data = new Dictionary<string, string>(dictionary, StringComparer.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// 格式化Key
+        /// </summary>
+        /// <param name="key"></param>
+        /// <returns></returns>
+        private string NormalizeKey(string key)
+        {
+            key = RemoveKeyPrefix(key);
+            key = ReplaceKeyDelimiter(key);
+            return key;
+        }
+
+        /// <summary>
+        /// 移除指定前缀
+        /// </summary>
+        /// <param name="key"></param>
+        /// <returns></returns>
+        private string RemoveKeyPrefix(string key)
+        {
+            return _prefix.IsNullOrEmpty()
+                ? key
+                : key.Substring(_prefix.Length);
+        }
+
+        /// <summary>
+        /// 替换分隔符
+        /// </summary>
+        /// <param name="key"></param>
+        /// <returns></returns>
+        private string ReplaceKeyDelimiter(string key)
+        {
+            return key.Replace("__", ConfigurationPath.KeyDelimiter);
         }
     }
 }
